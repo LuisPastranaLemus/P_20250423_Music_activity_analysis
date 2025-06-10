@@ -28,7 +28,9 @@ try:
                       plot_dual_histogram,
                       plot_frequency_density,
                       plot_grouped_barplot,
-                      plot_horizontal_bar)
+                      plot_horizontal_bar,
+                      plot_grouped_bars,
+                      plot_grouped_bars_indx)
     
     from .utils import(format_notebook)
                       
@@ -62,5 +64,7 @@ __all__ = ['load_dataset_from_zip',
            'plot_frequency_density',
            'plot_grouped_barplot',
            'plot_horizontal_bar',
+           'plot_grouped_bars',
+           'plot_grouped_bars_indx',
            
            'format_notebook']

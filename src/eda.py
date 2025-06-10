@@ -33,7 +33,7 @@ def plot_boxplots(ds_list, xlabels, ylabel, title, yticks_range=None, rotation=0
     # If color is list, assign custom palette; if string, use solid color
     if isinstance(color, (list, tuple)) and len(color) == len(xlabels):
         palette = dict(zip(xlabels, color))
-        sns.boxplot(x='group', y='value', data=df, palette=palette)
+        sns.boxplot(x='group', y='value', hue='group', data=df, palette=palette)
     else:
         sns.boxplot(x='group', y='value', data=df, color=color)
     
@@ -223,3 +223,44 @@ def plot_horizontal_bar(ds, colors=['black', 'grey'], xlabel='', ylabel='', titl
     
     plt.tight_layout()
     plt.show()
+
+# plot_grouped_bars(df, index_name='city', title='Music Activity per City', ylabel='Activity Count')
+def plot_grouped_bars(df, title='', xlabel='', ylabel='', rotation=0, grid_axis='y'):
+    
+    df.plot(kind='bar', figsize=(15, 7))
+
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.xticks(rotation=rotation)
+    plt.grid(axis=grid_axis)
+    plt.tight_layout()
+    plt.show()
+
+# plot_grouped_bars_indx(df, index_name='city', title='Music Activity per City', ylabel='Activity Count')
+def plot_grouped_bars_indx(df, index_name='', title='', xlabel='', ylabel='', rotation=0, grid_axis='y'):
+    """
+    Plots a grouped bar chart for numeric columns, grouped by a categorical column (assumed to be 'city').
+
+    Parameters:
+    - df: pandas DataFrame with a 'city' column and numeric columns to plot
+    - title: str, chart title
+    - xlabel: str, label for x-axis
+    - ylabel: str, label for y-axis
+    - rotation: int, rotation angle for x-tick labels
+    - grid_axis: str, which axis to show grid on ('x', 'y', or 'both')
+    """
+    df_plot = df.set_index(index_name)
+    
+    df_plot.plot(kind='bar', figsize=(15, 7))
+
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.xticks(rotation=rotation)
+    plt.grid(axis=grid_axis)
+    plt.tight_layout()
+    plt.show()
+
+
+
