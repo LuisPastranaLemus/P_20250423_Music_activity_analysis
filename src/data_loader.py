@@ -52,8 +52,10 @@ def load_dataset_from_csv(path, filename: str, **kwargs):
     
     return df
 
-def load_dataset_from_excel(path, **kwargs):
+def load_dataset_from_excel(path, filename: str, **kwargs):
 
+    path = path / filename
+    
     if not os.path.exists(path):
         raise FileNotFoundError(f"*** Error *** \nFile not found: {path}.")
         print("\nThis is your current", os.getcwd())

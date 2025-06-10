@@ -1,15 +1,17 @@
 # data_cleaning.py for dataset cleaning
-
+from difflib import SequenceMatcher
+from IPython.display import display, HTML
 import numpy as np
 import pandas as pd
 import re
 from tqdm import tqdm
 
-def check_existing_missing_values(df, df_name="DataFrame"):
+
+def check_existing_missing_values(df):
     
     missing_values = ['', ' ', 'N/A', 'none', 'None', 'null', 'NULL', 'NaN', 'nan', 'NAN', 'nat', 'NaT']
     
-    print(f"> Dataframe: {df_name}\n")
+    display(HTML(f"> Dataframe missing values:\n"))
     
     for column in df.columns:
         
@@ -19,13 +21,16 @@ def check_existing_missing_values(df, df_name="DataFrame"):
         
         else:
             
-            if df[column].isin(missing_values).any():
+            matches = df[df[column].isin(missing_values)][column].unique()
+            
+            if df[column].isin(missing_values).any() and matches.size > 0:
                                 
-                print(f"*** Warning ***   > Mising values in '{column}': {df[column].isin(missing_values).sum()}")
+                display(HTML(f"> Mising values in ['<i>{column}</i>']: <b>{df[column].isin(missing_values).sum()}</b>"))
+                display(HTML(f"&emsp;Matched values: {matches}"))
             
             else:
                 
-                print(f"*** Warning ***   > No missing values in '{column}' found")
+                display(HTML(f"> Missing values in ['<i>{column}</i>']: <b>None</b>"))
                 
     print()
 
@@ -57,7 +62,7 @@ def replace_missing_values(df, include=None, exclude=None):
     return df
 
 # Function dataframe for format normalizing type 'object' (strings)
-def normalize_df_string_format(df, include=None, exclude=None):
+def normalize_string_format(df, include=None, exclude=None):
         
     if exclude is None:
         exclude = []
@@ -74,26 +79,26 @@ def normalize_df_string_format(df, include=None, exclude=None):
            continue
        
        else:
-                      
+
+           df[column] = df[column].str.lower()
+           df[column] = df[column].str.strip()
            df[column] = df[column].str.replace(r'[^\w\s]', ' ', regex=True)
            df[column] = df[column].str.replace(r'\s+', '_', regex=True)
            df[column] = df[column].str.replace(r'__+', '_', regex=True)
-           df[column] = df[column].str.lower()
-           df[column] = df[column].str.strip()
     
     return df
 
 # Function for format normalizing type 'object' within column titles(strings)
-def normalize_headers_string_format(df):
+def normalize_columns_headers_format(df):
     
     title_norm = {}
     
     for title in df.columns:
         
-        nt = re.sub(r'[^\w\s]', ' ', title)
+        nt = title.lower().strip()
+        nt = re.sub(r'[^\w\s]', ' ', nt)
         nt = re.sub(r'\s+', '_', nt)
         nt = re.sub(r'__+', '_', nt)
-        nt = nt.lower().strip()
         
         title_norm[title] = nt
     
@@ -102,12 +107,25 @@ def normalize_headers_string_format(df):
     return df
 
 # Function for implicit duplicates
-def detect_implicit_duplicates(df, include=None, exclude=None):
+def detect_implicit_duplicates(df, include=None, exclude=None, fuzzy_threshold=0.85):
     
-    def is_non_composite(value):
-        return isinstance(value, str) and re.match(r'^[A-Za-z0-9]+$', value)
+    def normalize(value):
+        """Devuelve una versión en minúsculas y sin caracteres especiales."""
+        return re.sub(r'\W+', '', value.lower()) if isinstance(value, str) else ''
 
-    # Column filtering
+    def split_words(value):
+        """Divide por '_' y otras palabras, también separa compuestos pegados."""
+        if not isinstance(value, str):
+            return []
+        return re.findall(r'[A-Za-z0-9]+', value.lower())
+
+    def fuzzy_match(a, b):
+        """Devuelve True si a y b son similares sobre el umbral definido."""
+        return SequenceMatcher(None, a, b).ratio() >= fuzzy_threshold
+
+    display(HTML(f"> Implicit duplicates:\n"))
+
+    # Filtrado de columnas
     if include:
         columns = [col for col in include if col in df.columns]
     elif exclude:
@@ -116,70 +134,75 @@ def detect_implicit_duplicates(df, include=None, exclude=None):
         columns = df.columns.tolist()
 
     for col in columns:
-        print(f"\n> Prossesing column: '{col}'")
+        display(HTML(f"\n> Processing column: ['<i>{col}</i>']"))
 
-        # Filtering unique values and non-composite
         values = df[col].dropna().unique()
-        values = [v for v in values if is_non_composite(v)]
-
+        values = [v for v in values if isinstance(v, str)]
+        normalized_values = {v: normalize(v) for v in values}
         results = {}
 
-        # tqdm used for progress bar
-        for base in tqdm(values, desc=f"> Comparing in column '{col}'", unit=" values"):
-            matches = [other for other in values if base != other and base in other]
+        for base in tqdm(values, desc=f"> Comparing column ['{col}']", unit=" values"):
+            base_norm = normalized_values[base]
+            base_parts = set(split_words(base))
+            matches = []
+
+            for other in values:
+                if base == other:
+                    continue
+                other_norm = normalized_values[other]
+                other_parts = set(split_words(other))
+
+                if (
+                    base_norm in other_norm or 
+                    other_norm in base_norm or 
+                    base_parts & other_parts or 
+                    fuzzy_match(base_norm, other_norm)
+                ):
+                    matches.append(other)
+
             if matches:
                 results[base] = matches
 
-        # Ordered results
-        print(f"\n> Results for column '{col}':")
+        display(HTML(f"\n> Results for column ['<i>{col}</i>']:"))
         if results:
-            for base, matches in sorted(results.items()):
-                print(f"  '{base}' -> {matches}")
+            for base, found in results.items():
+                display(HTML(f"  ['<i>{col}</i>'] '<b>{base}</b>' → '{found}'"))
         else:
-            print("  No implicit duplicates were found.")
+            display(HTML("  No implicit duplicated was found."))
 
-    # Show results
-    if results:
-        print("\n[> Simples vs Simples ONLY]")
-        for col, base, found in results:
-            print(f"  [{col}] '{base}' → '{found}'")
-    else:
-        print("  No implicit duplicates among simple values.")
+    return None
 
-    return results
+
 
 # Function for replacing string date values to datetime values
-def replace_string_values_datetime(df, include=None, exclude=None, frmt=None, time_zone='UTC'):
-    
+def normalize_datetime(df, include=None, exclude=None, frmt=None, time_zone='UTC'):
     if exclude is None:
         exclude = []
     
     if include is None:
-        available_columns = [col for col in df.columns if col not in exclude]
+        target_columns = [col for col in df.columns if col not in exclude]
     else:
-        available_columns = [col for col in include if col not in exclude]
-    
-    for column in available_columns:
-        
-        if df[column].dtype != 'object':
-            
-            continue
-        
-        else:
-            
+        target_columns = [col for col in include if col not in exclude]
+
+    for column in target_columns:
+        if pd.api.types.is_object_dtype(df[column]) or pd.api.types.is_string_dtype(df[column]):
             df[column] = pd.to_datetime(df[column], format=frmt, errors='coerce')
-            
-            try:
-                
-                df[column] = df[column].dt.tz_localize(time_zone)
-            
-            except TypeError:
-                
-                df[column] = df[column].dt.tz_convert(time_zone)
+
+        if pd.api.types.is_datetime64_any_dtype(df[column]):
+            # If the format is only time, convert to type .dt.time
+            if frmt in ["%H:%M:%S", "%H:%M"]:
+                df[column] = df[column].dt.time
+            else:
+                if df[column].dt.tz is None:
+                    df[column] = df[column].dt.tz_localize(time_zone)
+                else:
+                    df[column] = df[column].dt.tz_convert(time_zone)
     
     return df
 
-# Function for findingv alues ​​that do not allow conversion to numeric
+
+
+# Function for finding values ​​that do not allow conversion to numeric
 def find_errors_to_numeric(df, column):
     
     mask = pd.to_numeric(df[column], errors='coerce').isna() & df[column].notna()
@@ -191,8 +214,8 @@ def find_errors_to_numeric(df, column):
    
     else:
         
-        print(f"*** Warning ***   > Non numeric values found in column [{column}]:\n{non_integer_values}\n")
-        print(f"> Conversion unsuccessful, non numeric values amount: {non_integer_values.shape[0]}\n")
+        print(f"> Non numeric values found in column ['<i>{column}</i>']:\n{non_integer_values}\n")
+        print(f"> Conversion <b>unsuccessful</b>, non numeric values amount: {non_integer_values.shape[0]}\n")
                 
     numeric_col = pd.to_numeric(df[column], errors='coerce')
     mask = (numeric_col % 1 != 0) & (~numeric_col.isna())
@@ -204,8 +227,8 @@ def find_errors_to_numeric(df, column):
    
     else:
         
-        print(f"*** Warning ***   > Numeric values that are not whole integer found in column [{column}]:\n{non_integer_numeric}\n")
-        print(f"> Conversion unsuccessful, numeric values non whole integer amount: {non_integer_numeric.shape[0]}\n")
+        print(f"> Numeric values that are <b>not whole integer</b> found in column ['<i>{column}</i>']:\n{non_integer_numeric}\n")
+        print(f"> Conversion unsuccessful, numeric values <b>non whole integer</b> amount: <b>{non_integer_numeric.shape[0]}</b>\n")
 
 # Function for converting values to integer data type
 def convert_ndtype_to_numeric(df, type=None, include=None, exclude=None):
