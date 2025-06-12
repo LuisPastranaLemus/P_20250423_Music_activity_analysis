@@ -1,5 +1,4 @@
 # __init__.py is a special file Python looks for when treating a folder as a package.
-
 # Smart __init__.py used for importing easily from the package.
 
 try:
@@ -16,12 +15,15 @@ try:
                                 normalize_columns_headers_format,
                                 detect_implicit_duplicates,
                                 normalize_datetime,
-                                find_errors_to_numeric,
-                                convert_ndtype_to_numeric,
+                                find_fail_conversion_to_numeric,
+                                convert_object_to_numeric,
                                 convert_integer_to_boolean,
                                 standardize_gender_values)
     
-    from .eda import (missing_values_heatmap,
+    from .eda import (outlier_limit_bounds,
+                      evaluate_central_trend,
+                      evaluate_correlation,
+                      missing_values_heatmap,
                       plot_boxplots,
                       plot_histogram,
                       plot_hue_histogram,
@@ -30,7 +32,9 @@ try:
                       plot_grouped_barplot,
                       plot_horizontal_bar,
                       plot_grouped_bars,
-                      plot_grouped_bars_indx)
+                      plot_grouped_bars_indx,
+                      plot_pairplot,
+                      plot_scatter_matrix)
     
     from .utils import(format_notebook)
                       
@@ -51,11 +55,14 @@ __all__ = ['load_dataset_from_zip',
            'normalize_columns_headers_format',
            'detect_implicit_duplicates',
            'normalize_datetime',
-           'find_errors_to_numeric',
-           'convert_ndtype_to_numeric',
+           'find_fail_conversion_to_numeric',
+           'convert_object_to_numeric',
            'convert_integer_to_boolean',
            'standardize_gender_values',
            
+           'outlier_limit_bounds',
+           'evaluate_central_trend',
+           'evaluate_correlation',
            'missing_values_heatmap',
            'plot_boxplots',
            'plot_histogram',
@@ -66,5 +73,7 @@ __all__ = ['load_dataset_from_zip',
            'plot_horizontal_bar',
            'plot_grouped_bars',
            'plot_grouped_bars_indx',
+           'plot_pairplot',
+           'plot_scatter_matrix',
            
            'format_notebook']

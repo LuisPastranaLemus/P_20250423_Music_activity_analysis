@@ -37,15 +37,17 @@ This project aims to:
 │   └── processed/        # Final, ready-to-analyze dataset
 │
 ├── notebooks/
-│   └── 01-eda-no-shows.ipynb     # Main analysis notebook
+│   └── 01-eda.ipynb     # Main analysis notebook
 │
-├── scripts/
+├── src/
 │   └── clean_data.py     # Data cleaning and preprocessing functions
 │
 ├── outputs/
 │   └── figures/          # Generated plots and visuals
 │
-├── requirements.txt      # Required Python packages
+├── requirements/
+│   └── requirements.txt      # Required Python packages
+│
 ├── .gitignore            # Files and folders to be ignored by Git
 └── README.md             # This file
 
