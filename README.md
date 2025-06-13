@@ -50,7 +50,7 @@ This project aims to:
 │
 ├── .gitignore            # Files and folders to be ignored by Git
 └── README.md             # This file
-
+```
 ---
 
 ## 📌 Notes
