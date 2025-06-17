@@ -1,55 +1,34 @@
-# 🧭 Purchasing Activity Analysis
-Instacart is a grocery delivery platform where customers can place an order and have it delivered.
+# 🧭 Music Activity Analysis
+Music activity difference bewteen in Springfield and Shelbyville cities.
 
 ---
 
-## 🔍 Project Overview (P-20250505)
+## 🔍 Project Overview (P-20250423)
 
-Analyze Instacart users' shopping behavior to identify repurchase patterns, order frequency, and key products in the shopping process.
+In this project, music preferences of the cities of Springfield and Shelbyville will be compared. Simulated-world online music data will be studied to test the hypothesis outlined below and compare user behavior in these two cities.
+
+Hypothesis:   
+User music activity varies by day of the week and city.
 
 Key questions:
 
-- Which days and time of the day have the most order activity?
-- How often do users typically place orders?
-- How many items do they typically purchase per order?
-- Which products have the highest repurchase rate?
-- Which products are typically added to the cart first, and how relevant are they?
-- Is there a relationship between the order in which a product is added to the cart and the likelihood of it being reordered?
-- How frequent is repurchase among different user segments?
+- Which days and time of the day have the most music activity?
+- Which city has the most music activity?
 
 ---
 
 ## 🧮 Data Dictionary
 
-There are five tables in the dataset, and you'll need to use all of them to perform data preprocessing and exploratory data analysis. Below is a data dictionary that lists the columns in each table and describes the data they contain.
+Below is a data dictionary that lists the columns in the table and describes the data they contain.
 
-- `instacart_orders.csv`: Each row corresponds to an order in the Instacart app.
-    - `'order_id'`: An ID number that uniquely identifies each order.
-    - `'user_id'`: An ID number that uniquely identifies each customer's account.
-    - `'order_number'`: The number of times this customer has placed an order.
-    - `'order_dow'`: The day of the week the order was placed (0 if Sunday).
-    - `'order_hour_of_day'`: The hour of the day the order was placed.
-    - `'days_since_prior_order'`: The number of days since this customer placed their previous order.
-
-- `products.csv`: Each row corresponds to a unique product that customers can purchase.
-    - `'product_id'`: ID number that uniquely identifies each product.
-    - `'product_name'`: Name of the product.
-    - `'aisle_id'`: ID number that uniquely identifies each grocery aisle category.
-    - `'department_id'`: ID number that uniquely identifies each grocery department.
-
-- `'order_products.csv`: Each row corresponds to an item ordered in an order.
-    - `'order_id'`: ID number that uniquely identifies each order.
-    - `'product_id'`: ID number that uniquely identifies each product.
-    - `'add_to_cart_order'`: The sequential order in which each item was added to the cart.
-    - `'reordered'`: 0 if the customer has never ordered this product before, 1 if they have.
-
-- `aisles.csv`
-    - `'aisle_id'`: ID number that uniquely identifies each grocery aisle category.
-    - `'aisle'`: Aisle name.
-
-- `departments.csv`
-    - `'department_id'`: ID number that uniquely identifies each grocery department.
-    - `'department'`: Department name.
+- `music_project_en.csv` 
+    - `'userID'`: uniquely identifies each user
+    - `'Track'`: song title
+    - `'artist'`: artist name
+    - `'genre'`: music genre
+    - `'City'`: user's city
+    - `'time'`: time of day the track was played (HH:MM:SS)
+    - `'Day'`: day of the week.
 
 ---
 
