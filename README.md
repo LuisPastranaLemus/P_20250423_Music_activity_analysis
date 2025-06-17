@@ -108,7 +108,7 @@ This project is part of a personal learning portfolio focused on developing stro
 
 ---
 
-##👤 Author   
+## 👤 Author   
 Luis Sergio Pastrana Lemus   
 Engineer pivoting into Data Science | Passionate about insights, structure, and solving real-world problems with data.   
 [GitHub Profile](https://github.com/LuisPastranaLemus)   
