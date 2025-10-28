@@ -51,10 +51,16 @@ try:
                       plot_horizontal_boxplot,
                       missing_values_heatmap_plotlypx,
                       plot_qq_normality_tests_plotlypx,
+                      plotly_frequency_density_numeric_plotlypx,
+                      plotly_frequency_datetime_plotlypx,
+                      plotly_frequency_date_time_plotlypx,
+                      plotly_frequency_object_plotlypx,
                       plot_horizontal_boxplot_plotlypx,
-                      plotly_frequency_density_plotlypx,
                       plot_scatter_matrix_plotlypx,
-                      plot_cualitative_histogram_plotlypx)
+                      plot_vertical_bar_plotpx,
+                      plot_horizontal_bar_plotpx,
+                      plot_cualitative_histogram_plotlypx,
+                      plot_crosstab_bars_plotlypx)
     
     from .features import(cast_datatypes)
 
@@ -113,10 +119,16 @@ __all__ = ['load_dataset_from_zip',
            'plot_horizontal_boxplot',
            'missing_values_heatmap_plotlypx',
            'plot_qq_normality_tests_plotlypx',
+            'plotly_frequency_density_numeric_plotlypx',
+           'plotly_frequency_datetime_plotlypx',
+           'plotly_frequency_date_time_plotlypx',
+           'plotly_frequency_object_plotlypx',
            'plot_horizontal_boxplot_plotlypx',
-           'plotly_frequency_density_plotlypx',
            'plot_scatter_matrix_plotlypx',
+           'plot_vertical_bar_plotpx',
+           'plot_horizontal_bar_plotpx',
            'plot_cualitative_histogram_plotlypx',
+           'plot_crosstab_bars_plotlypx',
            
            'cast_datatypes',
 

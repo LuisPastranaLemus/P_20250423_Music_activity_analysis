@@ -15,51 +15,120 @@ import scipy.stats as stats
 
 
 # Function to detect outlier boundaries with optional clamping of lower bound to zero
-def outlier_limit_bounds(df, column, bound='both', clamp_zero=False):
+def outlier_limit_bounds(df, column, bound='both', clamp_zero=False, verbose=False):
     """
-    Detects outlier thresholds based on the IQR method and returns rows beyond those limits.
-
+    Detect outliers with the following logic:
+      - If IQR > 0: always use IQR method (lower = Q1 - 1.5*IQR, upper = Q3 + 1.5*IQR).
+      - If IQR == 0:
+          * If verbose == True -> use fallback mean ± 2*std to detect outliers (and show info).
+          * If verbose == False -> do NOT attempt detection (return None), because caller is expected
+            to have used verbose only when IQR==0.
     Parameters:
-    - df (DataFrame): The input DataFrame.
-    - column (str): The name of the numerical column to analyze.
-    - bound (str): One of 'both', 'lower', or 'upper' to indicate which bounds to evaluate.
-    - clamp_zero (bool): If True, clamps the lower bound to zero (useful for non-negative metrics).
-
+      - df: pandas DataFrame
+      - column: name of numeric column
+      - bound: 'both'|'lower'|'upper'
+      - clamp_zero: if True, clamps lower bound to 0
+      - verbose: as explained above (True => use fallback when IQR==0)
     Returns:
-    DataFrame(s): Rows identified as outliers, depending on the bound selected.
+      - DataFrame with outlier rows (original index preserved) or None.
     """
 
-    q1, q3 = df[column].quantile([0.25, 0.75])
+    if bound not in ('both', 'lower', 'upper'):
+        raise ValueError("Parameter 'bound' must be one of 'both', 'lower', 'upper'.")
+
+    # Compute quartiles
+    q1 = df[column].quantile(0.25)
+    q3 = df[column].quantile(0.75)
     iqr = q3 - q1
 
-    lower_bound = max(q1 - 1.5 * iqr, 0) if clamp_zero else q1 - 1.5 * iqr
-    upper_bound = q3 + 1.5 * iqr
-
-    display(HTML(f"> Outlier thresholds for <i>'{column}'</i>: \n"
-                 f"> Lower = <b>{lower_bound:.3f}</b>, > Upper = <b>{upper_bound:.3f}</b>"))
-
-    if bound not in ['both', 'lower', 'upper']:
-        display(HTML(f"> Invalid 'bound' parameter. Use <b>'both'</b>, <b>'upper'</b>, or <b>'lower'</b>."))
-        return
-
+    # Prepare empty result
     outliers = pd.DataFrame()
-    
-    if bound in ['both', 'lower']:
-        lower_outliers = df[df[column] < lower_bound]
-        if lower_outliers.empty:
-            display(HTML(f"> <b>No</b> lower outliers found in column <i>'{column}'</i>."))
-        outliers = pd.concat([outliers, lower_outliers])
 
-    if bound in ['both', 'upper']:
-        upper_outliers = df[df[column] > upper_bound]
-        if upper_outliers.empty:
-            display(HTML(f"> <b>No</b> upper outliers found in column <i>'{column}'</i>."))
-        outliers = pd.concat([outliers, upper_outliers])
+    # CASE A: IQR == 0
+    if iqr == 0:
+        
+        mean = df[column].mean()
+        std = df[column].std()
+        
+        lower_bound = mean - 2 * std
+        upper_bound = mean + 2 * std
+        
+        # If verbose=True we *use* the fallback (mean ± 2*std)
+        if verbose:
+            display(HTML(f"> <b>Warning:</b> IQR = 0 for '<i>{column}</i>' (Q1 ({q1}) = Q3 ({q1})).<br>"
+                         f"Using fallback thresholds mean ± 2*std."))
 
-    display(HTML(f"- - -"))
-    display(HTML(f"> Outliers:"))
+            # If std == 0 => all values same -> nothing to detect
+            if pd.isna(std) or std == 0:
+                display(HTML(f"> All values are identical (std = 0). No outliers can be detected."))
+                return None
+            
+            if clamp_zero:
+                lower_bound = max(0, lower_bound)
 
-    return outliers if not outliers.empty else None
+            display(HTML(f"> Mean = {mean:.6f}, Std = {std:.6f}<br>"
+                         f"> Lower = <b>{lower_bound:.6f}</b>, Upper = <b>{upper_bound:.6f}</b>"))
+
+            # Detect according to 'bound'
+            if bound in ('both', 'lower'):
+                low = df[df[column] < lower_bound]
+                if not low.empty:
+                    outliers = pd.concat([outliers, low])
+            if bound in ('both', 'upper'):
+                high = df[df[column] > upper_bound]
+                if not high.empty:
+                    outliers = pd.concat([outliers, high])
+
+            if outliers.empty:
+                display(HTML("> No outliers found with fallback mean±2*std."))
+                return None
+
+            # Deduplicate and return
+            outliers = outliers.loc[~outliers.index.duplicated(keep='first')].copy()
+            display(HTML(f"> Found <b>{len(outliers)}</b> outlier(s) using fallback method."))
+            return outliers
+
+        else:
+            display(HTML(f"> <b>IQR-based thresholds for '<i>{column}</i>':</b><br>"
+                         f"Q1 = {q1:.6f}, Q3 = {q3:.6f}, IQR = {iqr:.6f}<br>"
+                         f"Lower = <b>{lower_bound:.6f}</b>, Upper = <b>{upper_bound:.6f}</b>"))
+            display(HTML(f"> <b>Warning:</b> IQR = 0 for '<i>{column}</i>' (Q1 ({q1}) = Q3 ({q1})).<br>"
+                         f"Fallback thresholds mean ± 2*std should be used."))
+            return None
+    else:
+        # CASE B: IQR > 0 -> use IQR method (normal)
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        if clamp_zero:
+            lower_bound = max(0, lower_bound)
+
+        display(HTML(f"> <b>IQR-based thresholds for '<i>{column}</i>':</b><br>"
+                    f"Q1 = {q1:.6f}, Q3 = {q3:.6f}, IQR = {iqr:.6f}<br>"
+                    f"Lower = <b>{lower_bound:.6f}</b>, Upper = <b>{upper_bound:.6f}</b>"))
+
+        if bound in ('both', 'lower'):
+            low = df[df[column] < lower_bound]
+            if verbose and low.empty:
+                display(HTML("> <b>No</b> lower outliers found."))
+            if not low.empty:
+                outliers = pd.concat([outliers, low])
+
+        if bound in ('both', 'upper'):
+            high = df[df[column] > upper_bound]
+            if verbose and high.empty:
+                display(HTML("> <b>No</b> upper outliers found."))
+            if not high.empty:
+                outliers = pd.concat([outliers, high])
+
+        if outliers.empty:
+            if verbose:
+                display(HTML(f"> <b>No outliers</b> detected with IQR method for column '{column}'."))
+            return None
+
+        outliers = outliers.loc[~outliers.index.duplicated(keep='first')].copy()
+        display(HTML(f"> <b>Outliers detected:</b> {len(outliers)} row(s)."))
+        return outliers
+
 
 # Function to evaluate the central tendency of a numerical feature
 def evaluate_central_trend(df, column):
@@ -1498,7 +1567,9 @@ def plot_horizontal_boxplot(data, column, figsize=(15, 5), box_color='lightgrey'
 # with outliers	            Freedman–Diaconis, Excellent for data with outliers. Uses the interquartile range (IQR).
 # No idea	                bins='auto'
 
-
+# ---
+# Plotly Express plotting functions
+# ---
 
 # Function to visualize missing values within a DataFrame using a heatmap
 # missing_values_heatmap_plotlypx(df)
@@ -1528,7 +1599,6 @@ def missing_values_heatmap_plotlypx(df, title='Heatmap of Missing Values'):
         xaxis=dict(tickfont=dict(size=10))  # Tamaño de letra más pequeño
     )
     fig.show()
-
 
 # Plots Quantile to Quantile graph
 # plot_qq_normality_tests_plotlypx(df, 'column_name')
@@ -1631,7 +1701,293 @@ def plot_qq_normality_tests_plotlypx(data, column, dist='norm', dist_params=None
     """
     display(HTML(html))
 
+# Function to plot a frequency density histogram with optional KDE overlay
+# ds | df['column_name']
+# plot_frequency_density_plotlypx(tips['tip'], bins=20, color='grey', title='Density Plot for Tips', xlabel='Tip Amount ($)', ylabel='Density',
+#                                 xticks_range=(0, 11, 1), rotation=45, show_kde=True)
+def plotly_frequency_density_numeric_plotlypx(ds, bins=10, density=True, color='grey', title='', xlabel='', ylabel='Frequency/Density',
+                                              xticks_range=None, rotation=0, show_kde=True):
+    """
+    Interactive frequency density histogram with optional KDE overlay using Plotly.
 
+    Parameters:
+    - ds (Series): Numerical data to plot.
+    - bins (int or array-like): Number or range of bins for the histogram.
+    - density(True): True for Probability density and False for Frequency
+    - color (str): Histogram bar color.
+    - title (str): Plot title.
+    - xlabel (str): Label for the x-axis.
+    - ylabel (str): Label for the y-axis.
+    - xticks_range (tuple, optional): Tuple (min, max, step) for x-tick configuration.
+    - rotation (int, optional): Angle for tick label rotation (not supported in Plotly).
+    - show_kde (bool, optional): Whether to overlay a KDE curve.
+
+    Output:
+    Displays an interactive histogram with density normalization, mean/median lines, and optional KDE.
+    """
+    ds = ds.dropna()
+    mean_val = ds.mean()
+    median_val = ds.median()
+
+    # Histogram data
+    hist_data = np.histogram(ds, bins=bins, density=density)
+    bin_edges = hist_data[1]
+    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+    densities = hist_data[0]
+    frequencies = hist_data[0]
+
+    fig = go.Figure()
+
+    # Add histogram bars
+    fig.add_trace(go.Bar(
+        x=bin_centers,
+        y=densities if density == True else frequencies,
+        marker_color=color,
+        opacity=0.7,
+        name='Histogram',
+        width=np.diff(bin_edges),
+    ))
+
+    # Add KDE curve
+    if show_kde:
+        kde = gaussian_kde(ds)
+        x_vals = np.linspace(ds.min(), ds.max(), 500)
+        kde_vals = kde(x_vals) if density == True else (kde(x_vals) * len(ds) * np.diff(bin_edges)[0])
+        fig.add_trace(go.Scatter(
+            x=x_vals,
+            y=kde_vals,
+            mode='lines',
+            line=dict(color='darkblue', width=2),
+            name='KDE'
+        ))
+
+    # Add mean and median lines
+    fig.add_trace(go.Scatter(
+        x=[mean_val, mean_val],
+        y=[0, max(densities)*1.1] if density == True else [0, max(frequencies)*1.1],
+        mode='lines',
+        line=dict(color='red', dash='dash'),
+        name=f'Mean: {mean_val:.2f}'
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=[median_val, median_val],
+        y=[0, max(densities)*1.1] if density == True else [0, max(frequencies)*1.1],
+        mode='lines',
+        line=dict(color='blue', dash='dashdot'),
+        name=f'Median: {median_val:.2f}'
+    ))
+
+    # Layout settings
+    fig.update_layout(
+        title=title,
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        bargap=0.05,
+        template='plotly_white',
+        legend=dict(orientation='v', x=1.02, y=1, xanchor='right', yanchor='top'),
+        width=1200,
+        height=600
+    )
+
+    if xticks_range:
+        fig.update_xaxes(
+            range=[xticks_range[0], xticks_range[1]],
+            tickmode='array',
+            tickvals=np.arange(*xticks_range)
+        )
+
+    fig.show()
+
+# Function to plot a histogram of datetime values with full timestamp precision (YYYY-MM-DD HH:MM:SS),
+# including vertical lines for mean and median.
+# ds | df['datetime']
+# plotly_frequency_datetime_plotlypx(df['datetime'], bins=100,        # number of bins or array of bin edges
+#                                    density=False,                              # False = frequency, True = density
+#                                    color='teal', title='Event Distribution with Full Timestamp Precision', xlabel='Date-Time', ylabel='Event Count')
+def plotly_frequency_datetime_plotlypx(ds, bins=30, density=False, color='grey', title='Datetime Histogram', xlabel='Datetime', 
+                                       ylabel='Frequency', rotation='auto'):
+    """
+    Histogram for datetime values with X-axis showing precise timestamps (YYYY-MM-DD HH:MM:SS).
+    - ds: Serie datetime
+    - bins: número de bins o array de bordes
+    - density: True = densidad, False = frecuencia
+    """
+    s = pd.Series(ds).dropna()
+
+    # 1) Normalize to UTC and convert to integers: epoch to MILLISECONDS (int64)
+    # -> this completely avoids ns/fractions
+    dsu = pd.to_datetime(s, utc=True)
+    ds_ms = (dsu.astype('int64') // 1_000_000).astype('int64')  # ns -> ms (enteros)
+
+    # 2) Histogram over integers (ms)
+    hist, bin_edges_ms = np.histogram(ds_ms, bins=bins, density=density)
+
+    # 3) Centers and width in ms (INTEGER, no floats)
+    bin_edges_ms = bin_edges_ms.astype('int64')
+    bin_centers_ms = (bin_edges_ms[:-1] + bin_edges_ms[1:]) // 2  # integer midpoint
+    widths_ms = (bin_edges_ms[1:] - bin_edges_ms[:-1]).astype('int64')
+
+    #4) Convert ONLY here to datetime (ms) for X axis. No ns -> no warning.
+    bin_centers_dt = pd.to_datetime(bin_centers_ms, unit='ms', utc=True)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=bin_centers_dt, y=hist.astype(float), marker_color=color, opacity=0.7, width=widths_ms,  # Plotly expects milliseconds as a number on datetime axes
+                         name='Histogram'))
+
+    # 5) Mean and median lines: calculate in ms (int) and convert to datetime (ms)
+    mean_ms = int(ds_ms.mean())           # average in ms
+    median_ms = int(np.median(ds_ms))     # median in ms
+    mean_dt = pd.to_datetime(mean_ms, unit='ms', utc=True)
+    median_dt = pd.to_datetime(median_ms, unit='ms', utc=True)
+
+    y_top = float(max(hist) * 1.1) if len(hist) else 1.0
+    fig.add_trace(go.Scatter(x=[mean_dt, mean_dt], y=[0, y_top], mode='lines', line=dict(color='red', dash='dash'), name='Mean'))
+    fig.add_trace(go.Scatter(x=[median_dt, median_dt], y=[0, y_top], mode='lines', line=dict(color='blue', dash='dashdot'), name='Median'))
+
+    # 6) Layout
+    fig.update_layout(
+        title=title,
+        xaxis_title=xlabel,
+        yaxis_title=ylabel if ylabel else ('Density' if density else 'Frequency'),
+        template='plotly_white',
+        bargap=0.05,
+        width=1200, height=500
+    )
+    fig.update_xaxes(tickformat='%Y-%m-%d %H:%M:%S')  # clean format
+    
+    # 7) Automatic rotation (or fixed if you enter a number)
+    if rotation == 'auto':
+        # Simple heuristic by number of bins (robust and sufficient in practice)
+        n = len(bin_centers_dt)
+        if n <= 10:
+            angle = 0
+        elif n <= 20:
+            angle = 30
+        elif n <= 40:
+            angle = 45
+        elif n <= 80:
+            angle = 60
+        else:
+            angle = 90
+        fig.update_xaxes(tickangle=angle)
+    elif isinstance(rotation, (int, float)):
+        fig.update_xaxes(tickangle=float(rotation))
+    # (if rotation is None or an unexpected value, we leave Plotly's default)
+    
+    fig.show()
+    
+# Function to plot datetime counts with resampling and mean/median lines
+# ds | df['datetime']
+# plot_datetime_counts(df['datetime'], resample='D',    # 'D' = daily, 'H' = hourly, 'M' = monthly
+#                      density=False,                   # False = raw counts, True = proportions
+#                      color='steelblue', title='Events per Day', xlabel='Date', ylabel='Event Count', rotation=30)
+# plot_datetime_counts(df['datetime'], resample='H', density=True, title='Hourly Distribution of Events', color='darkorange')
+def plotly_frequency_date_time_plotlypx(ds, resample: str = 'D',    # 'D' (day), 'H' (hour), 'M' (month), '15min', etc.
+                                        density: bool = False,      # True: proportion; False: count
+                                        color: str = 'grey', title: str = '', xlabel: str = 'Date-Time', ylabel: str = 'Frequency',
+                                        rotation: int = 0):
+    """
+    Plots counts by period for a series of dates.
+    - ds: Datetime series/column (accepts tz-aware or date-convertible strings)
+    - resample: Grouping frequency ('D', 'H', 'M', '15min', etc.)
+    - density: Normalizes to a proportion of the total
+    """
+    # 1) Normalize to UTC and force MILLISECOND precision (avoids ns)
+    s = pd.Series(ds).dropna()
+    dsu = pd.to_datetime(s, utc=True)                                   # can come with convertible tz or string
+    
+    # Convert to integer ms and back to datetime (unit='ms') to ensure 0 ns
+    ds_ms = (dsu.astype('int64') // 1_000_000).astype('int64')          # ns -> ms (integers)
+    dsu_ms = pd.to_datetime(ds_ms, unit='ms', utc=True)                 # datetime with ms precision
+
+    # 2) Series of 1's with datetime index (ms) to resample without ns
+    counts = pd.Series(1, index=dsu_ms).resample(resample).sum().fillna(0)
+
+    # 3) Y values ​​(count or proportion)
+    y_vals = counts.values.astype(float)
+    if density and y_vals.sum() > 0:
+        y_vals = y_vals / y_vals.sum()
+
+    # 4) Figure
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=counts.index,             # DateTimeIndex now in ms
+                         y=y_vals, name='Density' if density else 'Count', marker_color=color, opacity=0.85))
+
+    # 5) Mean and median lines in MILLISECONDS (integers) -> datetime(ms)
+    if len(ds_ms):
+        mean_ms = int(ds_ms.mean())
+        median_ms = int(np.median(ds_ms))
+        mean_dt = pd.to_datetime(mean_ms, unit='ms', utc=True)
+        median_dt = pd.to_datetime(median_ms, unit='ms', utc=True)
+        y_top = float(max(y_vals) * 1.1) if len(y_vals) else 1.0
+
+        fig.add_trace(go.Scatter(x=[mean_dt, mean_dt], y=[0, y_top], mode='lines', line=dict(color='red', dash='dash'), name='Mean'))
+        fig.add_trace(go.Scatter(x=[median_dt, median_dt], y=[0, y_top], mode='lines', line=dict(color='blue', dash='dashdot'), name='Median'))
+
+    # 6) Layout
+    fig.update_layout(title=title or f'Events per {resample}', xaxis_title=xlabel, yaxis_title=ylabel if ylabel else ('Density' if density else 'Count'),
+                      template='plotly_white', bargap=0.05, legend=dict(orientation='v', x=1.02, y=1, xanchor='right', yanchor='top'),
+                      width=1200, height=500)
+    if rotation:
+        fig.update_xaxes(tickangle=rotation)
+
+    # Force clean X-axis format (seconds)
+    fig.update_xaxes(tickformat='%Y-%m-%d %H:%M:%S')
+    fig.show()
+
+# Function to plot categorical counts with sorting and top N filtering
+# ds | df['column_name']
+# plotly_frequency_object_plotlypx(df['eventname'], top_n=15,     # show only top 15 categories
+#                                  sort='freq',                   # 'freq' = by frequency, 'index' = by label
+#                                  ascending=False,               # False = descending order
+#                                  color='purple', title='Top 15 Event Types', xlabel='Event Type', ylabel='Occurrences', rotation=45)
+# plotly_frequency_object_plotlypx(df['device_type'], sort='index', ascending=True, color='teal', title='Counts by Device Type')
+def plotly_frequency_object_plotlypx(ds, top_n: int | None = None,    # limit to top N by frequency (None = all)
+                                     sort: str = 'freq',          # 'freq' o 'index'
+                                     ascending: bool = False,     # for 'freq' by default we want top major→minor
+                                     color: str = 'grey', title: str = '', xlabel: str = 'Category', ylabel: str = 'Frequency',
+                                     rotation: int = 0):
+    """
+    Plots counts by category.
+    - ds: Categorical/Boolean/String series
+    - top_n: Limits to the top N categories
+    - sort: 'freq' (by frequency) or 'index' (by label)
+    - ascending: Ascending/Descending order
+    """
+    s = pd.Series(ds).dropna().astype('category')
+    counts = s.value_counts(dropna=False)
+
+    if sort == 'index':
+        counts = counts.sort_index(ascending=ascending, key=lambda x: x.astype(str))
+    else:  # 'freq'
+        counts = counts.sort_values(ascending=ascending)
+
+    if top_n is not None and top_n > 0:
+        counts = counts.head(top_n)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=counts.index.astype(str),
+        y=counts.values.astype(float),
+        marker_color=color,
+        opacity=0.9,
+        name='Count'
+    ))
+
+    fig.update_layout(
+        title=title or 'Category Counts',
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        template='plotly_white',
+        bargap=0.15,
+        legend=dict(orientation='v', x=1.02, y=1, xanchor='right', yanchor='top'),
+        width=1100, height=520
+    )
+    if rotation:
+        fig.update_xaxes(tickangle=rotation)
+
+    fig.show()
 
 # Plot horizontal boxplot
 # plot_horizontal_boxplotpx(df, 'column_name')
@@ -1745,117 +2101,22 @@ def plot_horizontal_boxplot_plotlypx(data, column, title=None):
 
     fig.show()
 
-
-
-# Function to plot a frequency density histogram with optional KDE overlay
-# ds | df['column_name']
-# plot_frequency_density_plotlypx(tips['tip'], bins=20, color='grey', title='Density Plot for Tips', xlabel='Tip Amount ($)', ylabel='Density',
-#                        xticks_range=(0, 11, 1), rotation=45, show_kde=True)
-def plotly_frequency_density_plotlypx(ds, bins=10, density=True, color='grey', title='', xlabel='', ylabel='Frequency/Density',
-                                      xticks_range=None, rotation=0, show_kde=True):
-    """
-    Interactive frequency density histogram with optional KDE overlay using Plotly.
-
-    Parameters:
-    - ds (Series): Numerical data to plot.
-    - bins (int or array-like): Number or range of bins for the histogram.
-    - density(True): True for Probability density and False for Frequency
-    - color (str): Histogram bar color.
-    - title (str): Plot title.
-    - xlabel (str): Label for the x-axis.
-    - ylabel (str): Label for the y-axis.
-    - xticks_range (tuple, optional): Tuple (min, max, step) for x-tick configuration.
-    - rotation (int, optional): Angle for tick label rotation (not supported in Plotly).
-    - show_kde (bool, optional): Whether to overlay a KDE curve.
-
-    Output:
-    Displays an interactive histogram with density normalization, mean/median lines, and optional KDE.
-    """
-    ds = ds.dropna()
-    mean_val = ds.mean()
-    median_val = ds.median()
-
-    # Histogram data
-    hist_data = np.histogram(ds, bins=bins, density=density)
-    bin_edges = hist_data[1]
-    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-    densities = hist_data[0]
-    frequencies = hist_data[0]
-
-    fig = go.Figure()
-
-    # Add histogram bars
-    fig.add_trace(go.Bar(
-        x=bin_centers,
-        y=densities if density == True else frequencies,
-        marker_color=color,
-        opacity=0.7,
-        name='Histogram',
-        width=np.diff(bin_edges),
-    ))
-
-    # Add KDE curve
-    if show_kde:
-        kde = gaussian_kde(ds)
-        x_vals = np.linspace(ds.min(), ds.max(), 500)
-        kde_vals = kde(x_vals) if density == True else (kde(x_vals) * len(ds) * np.diff(bin_edges)[0])
-        fig.add_trace(go.Scatter(
-            x=x_vals,
-            y=kde_vals,
-            mode='lines',
-            line=dict(color='darkblue', width=2),
-            name='KDE'
-        ))
-
-    # Add mean and median lines
-    fig.add_trace(go.Scatter(
-        x=[mean_val, mean_val],
-        y=[0, max(densities)*1.1] if density == True else [0, max(frequencies)*1.1],
-        mode='lines',
-        line=dict(color='red', dash='dash'),
-        name=f'Mean: {mean_val:.2f}'
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=[median_val, median_val],
-        y=[0, max(densities)*1.1] if density == True else [0, max(frequencies)*1.1],
-        mode='lines',
-        line=dict(color='blue', dash='dashdot'),
-        name=f'Median: {median_val:.2f}'
-    ))
-
-    # Layout settings
-    fig.update_layout(
-        title=title,
-        xaxis_title=xlabel,
-        yaxis_title=ylabel,
-        bargap=0.05,
-        template='plotly_white',
-        legend=dict(orientation='v', x=1.02, y=1, xanchor='right', yanchor='top'),
-        width=1200,
-        height=600
-    )
-
-    if xticks_range:
-        fig.update_xaxes(
-            range=[xticks_range[0], xticks_range[1]],
-            tickmode='array',
-            tickvals=np.arange(*xticks_range)
-        )
-
-    fig.show()
-
 # Function to plot a scatter matrix for exploring pairwise relationships (CORR)
 # df | df['column1_name', 'column2_name', ..., 'columnN_name']
 # plot_scatter_matrix(df, figsize=(12, 10), diagonal='kde', color='teal', alpha=0.4)
 def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 600, marker_color: str = "grey", marker_opacity: float = 0.6,
-                          bins: int = 20, horizontal_spacing: float = 0.03, vertical_spacing: float = 0.03,):
+                          bins: int = 20, horizontal_spacing: float = 0.03, vertical_spacing: float = 0.03, corr_method: str = "pearson"):
     """
     Interactive correlation matrix (lower triangle) with:
-    - Scatter in cells i>j
+    - Scatter in cells i>j (annotated with correlation using `corr_method`)
     - Histogram + KDE on the diagonal (i=j)
-    - Pearson correlation annotation (r) in each scatter cell
+    - corr_method: 'pearson' (default), 'spearman', or 'kendall'.
     """
+    # Validate correlation method
+    corr_method = corr_method.lower()
+    if corr_method not in ("pearson", "spearman", "kendall"):
+        raise ValueError("corr_method must be one of 'pearson', 'spearman', or 'kendall'.")
+
     if columns is None:
         columns = df.select_dtypes(include="number").columns.tolist()
     if len(columns) < 2:
@@ -1893,14 +2154,20 @@ def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 6
                         ),
                         row=i, col=j
                     )
-                    r = pair[xcol].corr(pair[ycol])
+                    # calculate correlation with the chosen method
+                    try:
+                        r = pair[xcol].corr(pair[ycol], method=corr_method)
+                    except Exception:
+                        # fallback seguro si pandas no soporta algún caso raro
+                        r = float("nan")
+
                     suf = axis_suffix(i, j)
                     fig.add_annotation(
                         x=0.04, y=0.9,
                         xref=f"x{suf} domain", yref=f"y{suf} domain",
-                        text=f"r = {r:.2f}",
+                        text=f"{corr_method[:1].upper() + corr_method[1:]} r = {r:.2f}",
                         showarrow=False,
-                        font=dict(size=12),
+                        font=dict(size=11),
                         bgcolor="white",
                         bordercolor="#e0e0e0",
                         borderwidth=1,
@@ -1915,11 +2182,9 @@ def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 6
             elif i == j:  # Diagonal: histogram + KDE
                 series = data[xcol].dropna()
                 if not series.empty:
-                    #1) Explicitly calculate bins to find the exact bin_width
                     counts, edges = np.histogram(series, bins=bins)
                     bin_width = edges[1] - edges[0]
 
-                    # 2) Histogram using the same edges (matches 1:1 with np.histogram)
                     fig.add_trace(
                         go.Histogram(
                             x=series,
@@ -1932,12 +2197,9 @@ def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 6
                         row=i, col=j
                     )
 
-                    # 3) KDE on the same mesh and scaled to "counts"
                     kde = gaussian_kde(series)
-                    x_grid = np.linspace(edges[0], edges[-1], 400)  # dense mesh within edges
+                    x_grid = np.linspace(edges[0], edges[-1], 400)
                     y_kde = kde(x_grid)
-
-                    # Scale to counts: ∫KDE = 1 => height in "counts" ≈ N * bin_width * KDE(x)
                     y_kde_counts = y_kde * len(series) * bin_width
 
                     fig.add_trace(
@@ -1945,7 +2207,7 @@ def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 6
                             x=x_grid,
                             y=y_kde_counts,
                             mode="lines",
-                            line=dict(width=3),   # we don't set color so it inherits from the theme if you want
+                            line=dict(width=3),
                             name="KDE",
                             showlegend=False,
                             hovertemplate=f"{xcol}: %{{x}}<br>KDE(counts): %{{y}}<extra></extra>",
@@ -1962,14 +2224,129 @@ def plot_scatter_matrix_plotlypx(df: pd.DataFrame, columns=None, height: int = 6
                 fig.update_xaxes(visible=False, row=i, col=j)
                 fig.update_yaxes(visible=False, row=i, col=j)
 
+    # Include the correlation method used in the title.
+    title_text = f"Correlation matrix (lower triangle) — correlation method: {corr_method.capitalize()}"
     fig.update_layout(
         height=height,
-        margin=dict(l=40, r=10, t=40, b=40),
+        margin=dict(l=40, r=10, t=60, b=40),
         template="plotly_white",
-        title=dict(text="Correlation matrix (lower triangle) with Pearson's r and KDE", x=0.5),
+        title=dict(text=title_text, x=0.5),
     )
     fig.update_xaxes(showgrid=True, zeroline=False)
     fig.update_yaxes(showgrid=True, zeroline=False)
+
+    fig.show()
+
+# Function to plot a vertical bar chart using Plotly Express
+# Example usage:
+# plot_vertical_bar_plotpx(df_fs_events, x='users', y='eventname', hue='group',     # opcional, columna categórica
+#                            title='Usuarios únicos por evento', xlabel='Usuarios', ylabel='Evento', sort=True)
+def plot_vertical_bar_plotpx(df, x: str, y: str, hue: str | None = None,         # categorical column for grouping (like hue in seaborn)
+                             title: str = '', xlabel: str = '', ylabel: str = '', sort: bool = True, height: int = 500, width: int = 1200, color: str = 'grey'):
+    """
+    Plots a horizontal bar chart with Plotly Express.
+
+    Parameters:
+    - df (DataFrame): Input DataFrame.
+    - x (str): Column name for x-axis values (numeric).
+    - y (str): Column name for y-axis categories.
+    - hue (str, optional): Column for coloring/grouping (categorical).
+    - title (str): Chart title.
+    - xlabel (str): X-axis label.
+    - ylabel (str): Y-axis label.
+    - sort (bool): If True, sorts bars by x descending.
+    - height (int): Figure height.
+    - width (int): Figure width.
+    - color (str): Default bar color if no hue is given.
+    """
+
+    data = df.copy()
+    if sort:
+        data = data.sort_values(by=x, ascending=True)
+
+    if hue:
+        fig = px.bar(
+            data,
+            x=x,
+            y=y,
+            color=hue,             # uses categoric columns
+            title=title,
+            height=height,
+            width=width
+        )
+    else:
+        fig = px.bar(
+            data,
+            x=x,
+            y=y,
+            title=title,
+            height=height,
+            width=width,
+            color_discrete_sequence=[color]
+        )
+
+    fig.update_layout(
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        template='plotly_white'
+    )
+
+    fig.show()
+
+# Function to plot a horizontal bar chart using Plotly Express
+# Example usage:
+# plot_horizontal_bar_plotpx(df_fs_events, x='users', y='eventname', hue='group',     # opcional, columna categórica
+#                            title='Usuarios únicos por evento', xlabel='Usuarios', ylabel='Evento', sort=True)
+def plot_horizontal_bar_plotpx(df, x: str, y: str, hue: str | None = None,         # categorical column for grouping (like hue in seaborn)
+                               title: str = '', xlabel: str = '', ylabel: str = '', sort: bool = True, height: int = 500, width: int = 1200, color: str = 'grey'):
+    """
+    Plots a horizontal bar chart with Plotly Express.
+
+    Parameters:
+    - df (DataFrame): Input DataFrame.
+    - x (str): Column name for x-axis values (numeric).
+    - y (str): Column name for y-axis categories.
+    - hue (str, optional): Column for coloring/grouping (categorical).
+    - title (str): Chart title.
+    - xlabel (str): X-axis label.
+    - ylabel (str): Y-axis label.
+    - sort (bool): If True, sorts bars by x descending.
+    - height (int): Figure height.
+    - width (int): Figure width.
+    """
+
+    data = df.copy()
+    if sort:
+        data = data.sort_values(by=x, ascending=True)
+        
+    if hue:
+        fig = px.bar(
+            data,
+            x=x,
+            y=y,
+            orientation='h',
+            color=hue,             # uses categoric columns
+            title=title,
+            height=height,
+            width=width
+        )
+    else:
+        fig = px.bar(
+            data,
+            x=x,
+            y=y,
+            title=title,
+            height=height,
+            width=width,
+            color_discrete_sequence=[color]
+        )
+
+    fig.update_layout(
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        template='plotly_white'
+    )
+
     fig.show()
 
 # Function to plot Histogram for Cualitative/categorical data
@@ -2037,5 +2414,45 @@ def plot_cualitative_histogram_plotlypx(series, color="grey", title="", xlabel="
         fig.update_xaxes(tickvals=list(range(len(xtick))), ticktext=xtick)
     if ytick is not None:
         fig.update_yaxes(tickvals=ytick)
+
+    fig.show()
+
+# Fuction to plot side by side bars for a Cualitative crosstab
+# plot_crosstab_bars(tabla, colors=["#1f77b4", "#ff7f0e"], figsize=(900, 500), title="Purchases by Gender", xlabel="Gender", 
+#                    ylabel="Frecuency", rotation_x=0)
+def plot_crosstab_bars_plotlypx(table, colors=None, figsize=(1200, 600), title=None, xlabel=None, ylabel=None, rotation_x=0, rotation_y=0):
+    """
+    Plots paired bars from a pd.crosstab table using Plotly Express.
+
+    Parameters:
+    -----------
+    - table: DataFrame
+             Result of pd.crosstab.
+    - colors: list, optional
+              List of colors for each category in columns.
+    - figsize: tuple, optional
+               Figure size (width, height) in pixels.
+    - title: str, optional
+             Chart title.
+    - xlabel: str, optional
+              X-axis label.
+    - ylabel: str, optional
+              Y-axis label.
+    - rotation_x: int, optional
+                  Rotation of the X-axis labels.
+    - rotation_y: int, optional
+                  Rotation of the Y-axis labels.
+    """
+
+    # Transform crosstab into long-form
+    df_long = table.reset_index().melt(id_vars=table.index.name, var_name=table.columns.name, value_name="count")
+
+    fig = px.bar(df_long, x=table.index.name, y="count", color=table.columns.name, barmode="group", color_discrete_sequence=colors)
+
+    # Customization
+    fig.update_layout(title=title, xaxis_title=xlabel, yaxis_title=ylabel, width=figsize[0], height=figsize[1])
+
+    fig.update_xaxes(tickangle=rotation_x)
+    fig.update_yaxes(tickangle=rotation_y)
 
     fig.show()
