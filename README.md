@@ -81,7 +81,8 @@ The notebook `00-guided-analysis_foundations.ipynb` reflects an early stage of m
 
 ---
 
-Explore the interactive dashboard on ![Dashboard Preview](https://public.tableau.com/views/Music_Activity_Shelbyville_Springfield/Dashboard1?:language=es-ES&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
+Explore the interactive dashboard on:   
+[![View on Tableau Public](https://img.shields.io/badge/View%20Dashboard-Tableau%20Public-blue?logo=tableau)](https://public.tableau.com/views/Music_Activity_Shelbyville_Springfield/Dashboard1?:language=es-ES&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link)
 
 ---
 
