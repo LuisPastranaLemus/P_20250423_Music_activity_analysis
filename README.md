@@ -41,10 +41,20 @@ The notebook `00-guided-analysis_foundations.ipynb` reflects an early stage of m
 ## 📂 Project Structure
 
 ```bash
+├── dashboards/           # Power BI, Tableau or Dash files
+|
+|
 ├── data/
 │   ├── raw/              # Original dataset(s) in CSV format
-│   ├── interim/          # Intermediate cleaned versions
 │   └── processed/        # Final, ready-to-analyze dataset
+|
+|
+├── docs/                 # Related documents
+|
+|
+├── models/               # Related Models
+|
+|
 │
 ├── notebooks/
 │   ├── 00-guided-analysis_foundations.ipynb     ← Initial guided project (TripleTen)
@@ -61,13 +71,15 @@ The notebook `00-guided-analysis_foundations.ipynb` reflects an early stage of m
 │   ├── features.py          # Creation and transformation functions for new variables to support modeling and EDA
 │   └── utils.py             # General utility functions for reusable helpers
 │
-├── outputs/
-│   └── figures/          # Generated plots and visuals
+├── Reports/                 # Generated reports
+│                
 │
 ├── requirements/
 │   └── requirements.txt      # Required Python packages
 │
 ├── .gitignore            # Files and folders to be ignored by Git
+|
+|
 └── README.md             # This file
 ```
 ---
