@@ -1,5 +1,5 @@
 # 🧭 Music Activity Analysis
-Music activity difference bewteen in Springfield and Shelbyville cities.
+Music activity difference bewteen Springfield and Shelbyville cities.
 
 ---
 
